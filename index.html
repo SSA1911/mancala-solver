@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mancala Solver — Capture Mode (6x4)</title>
+<style>
+  :root {
+    --wood-dark: #6b4226;
+    --wood-mid: #8a5a35;
+    --wood-light: #c68642;
+    --brass: #d4af37;
+    --brass-dark: #9c7a1f;
+    --pit-shadow: rgba(0,0,0,0.35);
+    --seed-color: #f2e6c9;
+    --accent: #ffd54a;
+    --you-color: #4fc3f7;
+    --opp-color: #ef5350;
+    --panel-bg: #2b1d14;
+    --text-light: #f5efe6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(ellipse at center, #3a2a1e 0%, #1c130d 100%);
+    font-family: 'Segoe UI', Tahoma, Verdana, sans-serif;
+    color: var(--text-light);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 12px 60px;
+  }
+  h1 { font-size: 1.4rem; margin: 6px 0 2px; letter-spacing: 0.5px; }
+  .subtitle { font-size: 0.85rem; opacity: 0.7; margin-bottom: 14px; }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    background: var(--panel-bg);
+    padding: 10px 16px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+  .controls label { font-size: 0.8rem; opacity: 0.85; margin-right: 4px; }
+  .controls select, .controls button {
+    background: var(--wood-mid);
+    color: var(--text-light);
+    border: 1px solid var(--wood-dark);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .controls select:hover, .controls button:hover { background: var(--wood-light); }
+  .controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .status-bar {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 0.95rem;
+    min-height: 24px;
+    text-align: center;
+  }
+  .turn-pill {
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+  .turn-you { background: var(--you-color); color: #002733; }
+  .turn-opp { background: var(--opp-color); color: #330000; }
+
+  .hint-box {
+    font-size: 0.85rem;
+    background: rgba(255,213,74,0.12);
+    border: 1px solid var(--accent);
+    padding: 6px 12px;
+    border-radius: 8px;
+    min-height: 34px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .board-wrap {
+    display: flex;
+    align-items: stretch;
+    background: linear-gradient(160deg, var(--wood-mid), var(--wood-dark));
+    border: 3px solid var(--brass-dark);
+    border-radius: 28px;
+    padding: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 0 30px rgba(0,0,0,0.3), inset 0 0 0 2px rgba(212,175,55,0.35);
+    gap: 10px;
+    position: relative;
+  }
+  .store {
+    width: 74px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: radial-gradient(circle at 40% 25%, #7a4f2c, var(--wood-dark) 75%);
+    box-shadow: inset 0 0 14px var(--pit-shadow), inset 0 0 0 2px rgba(212,175,55,0.3);
+    position: relative;
+    flex-direction: column;
+    padding: 10px 4px;
+  }
+  .store .label { font-size: 0.62rem; opacity: 0.8; margin-bottom: 4px; text-align:center; letter-spacing: 0.5px; }
+  .store .count { font-size: 1.7rem; font-weight: 700; color: var(--accent); text-shadow: 0 0 10px rgba(255,213,74,0.4); }
+
+  .rows {
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+    padding: 4px 0;
+  }
+  .row {
+    display: flex;
+    gap: 10px;
+  }
+  .pit {
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #d9a15c, var(--wood-mid) 70%);
+    box-shadow: inset 0 4px 10px var(--pit-shadow), inset 0 0 0 2px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #2b1d14;
+    position: relative;
+    cursor: default;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    user-select: none;
+  }
+  .pit.clickable {
+    cursor: pointer;
+  }
+  .pit.clickable:hover {
+    transform: translateY(-3px) scale(1.04);
+    box-shadow: inset 0 4px 10px var(--pit-shadow), 0 4px 10px rgba(0,0,0,0.4);
+  }
+  .pit:active.clickable {
+    transform: translateY(0) scale(0.96);
+  }
+  .pit.empty-pit { color: #6b5a45; }
+  .pit .idx-label {
+    position: absolute;
+    top: 3px;
+    left: 6px;
+    font-size: 0.55rem;
+    opacity: 0.5;
+    font-weight: 400;
+  }
+  .pit.suggested {
+    outline: 3px solid var(--accent);
+    box-shadow: 0 0 18px 4px var(--accent), inset 0 4px 10px var(--pit-shadow);
+    animation: pulse 1.4s infinite;
+  }
+  .pit.opp-input {
+    outline: 2px dashed var(--opp-color);
+  }
+  @keyframes pulse {
+    0%, 100% { outline-color: var(--accent); }
+    50% { outline-color: #fff3c4; }
+  }
+
+  /* Bead-style seeds (GamePigeon-esque): small glossy marbles clustered inside the pit */
+  .seed-dot {
+    position: absolute;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: inset -2px -2px 3px rgba(0,0,0,0.35), inset 2px 2px 2px rgba(255,255,255,0.5), 0 1px 2px rgba(0,0,0,0.4);
+  }
+
+  /* Exact count badge, sitting outside the pit (above for the top row, below for the bottom row) */
+  .count-badge {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--panel-bg);
+    color: var(--accent);
+    border: 1px solid var(--brass);
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 1px 7px;
+    line-height: 1.4;
+    pointer-events: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  }
+  .row.row-top .pit .count-badge { top: -20px; }
+  .row.row-bottom .pit .count-badge { bottom: -20px; }
+
+  /* Landing-preview arrow: a single floating element repositioned via JS onto whichever
+     pit/store the hovered or selected move's last seed would land in. */
+  .landing-arrow {
+    position: absolute;
+    font-size: 1.15rem;
+    color: var(--accent);
+    text-shadow: 0 0 6px rgba(255,213,74,0.8);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    display: none;
+    z-index: 6;
+    animation: arrowBounce 0.7s infinite;
+  }
+  .landing-arrow.show { display: block; }
+  @keyframes arrowBounce {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+  }
+
+  /* Traveling seed token used to animate a move being sown around the board */
+  .sow-token {
+    position: absolute;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff8e1, var(--accent) 70%);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5), 0 0 8px rgba(255,213,74,0.6);
+    pointer-events: none;
+    opacity: 0;
+    transition: left 0.11s ease, top 0.11s ease;
+    z-index: 5;
+  }
+  .sow-token.active { opacity: 1; }
+
+  .footer-note {
+    margin-top: 18px;
+    font-size: 0.75rem;
+    opacity: 0.55;
+    max-width: 520px;
+    text-align: center;
+  }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--panel-bg);
+    padding: 24px 32px;
+    border-radius: 14px;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    max-width: 320px;
+  }
+  .modal h2 { margin-top: 0; }
+  .modal button {
+    margin-top: 14px;
+    background: var(--accent);
+    color: #2b1d14;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .db-status {
+    font-size: 0.7rem;
+    opacity: 0.55;
+    margin: -6px 0 12px;
+    text-align: center;
+  }
+
+  @media (max-width: 560px) {
+    .pit { width: 46px; height: 46px; font-size: 1rem; }
+    .store { width: 52px; }
+    .row { gap: 6px; }
+    .board-wrap { gap: 6px; padding: 10px; }
+    .rows { gap: 22px; }
+    .seed-dot { width: 8px; height: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Mancala Solver — Capture Mode</h1>
+<div class="subtitle">6 houses · 4 seeds · Kalah capture rules</div>
+
+<div class="controls">
+  <div>
+    <label for="modeSelect">Opponent:</label>
+    <select id="modeSelect">
+      <option value="ai">AI plays automatically</option>
+      <option value="manual">I'll enter opponent's moves</option>
+    </select>
+  </div>
+  <div id="difficultyWrap">
+    <label for="difficultySelect">Difficulty:</label>
+    <select id="difficultySelect">
+      <option value="easy">Easy (random)</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard</option>
+      <option value="expert">Expert (deep search)</option>
+    </select>
+  </div>
+  <div>
+    <label for="firstMoveSelect">First move:</label>
+    <select id="firstMoveSelect">
+      <option value="you" selected>You (attacking)</option>
+      <option value="opponent">Opponent (you play defense)</option>
+    </select>
+  </div>
+  <button id="undoBtn">Undo</button>
+  <button id="newGameBtn">New Game</button>
+</div>
+<div class="db-status" id="dbStatus"></div>
+
+<div class="status-bar">
+  <span id="turnPill" class="turn-pill turn-you">Your turn</span>
+  <span id="scoreLine"></span>
+</div>
+
+<div class="hint-box" id="hintBox">Computing suggestion…</div>
+
+<div class="board-wrap">
+  <div class="store" id="oppStore">
+    <div class="label">OPPONENT<br>STORE</div>
+    <div class="count" id="oppStoreCount">0</div>
+  </div>
+  <div class="rows">
+    <div class="row row-top" id="topRow"></div>
+    <div class="row row-bottom" id="bottomRow"></div>
+  </div>
+  <div class="store" id="youStore">
+    <div class="label">YOUR<br>STORE</div>
+    <div class="count" id="youStoreCount">0</div>
+  </div>
+</div>
+
+<div class="footer-note">
+  Bottom row is your side. Click a glowing house to play the suggested move, or any of your non-empty houses to play a different one.
+  When "I'll enter opponent's moves" is selected, click the house the opponent actually chose (top row) and the engine will apply the result.
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2 id="modalTitle">Game Over</h2>
+    <p id="modalText"></p>
+    <button id="modalCloseBtn">New Game</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---- Board representation ----
+  // index 0-5  : Player 0 ("You") houses
+  // index 6    : Player 0 store
+  // index 7-12 : Player 1 ("Opponent") houses
+  // index 13   : Player 1 store
+  const YOU = 0, OPP = 1;
+  const STORE = [6, 13];
+  const HOUSES = [[0,1,2,3,4,5],[7,8,9,10,11,12]];
+
+  function initialBoard(){
+    const b = new Array(14).fill(4);
+    b[6] = 0; b[13] = 0;
+    return b;
+  }
+
+  function opposite(i){ return 12 - i; }
+
+  function legalMoves(board, player){
+    return HOUSES[player].filter(i => board[i] > 0);
+  }
+
+  function isSideEmpty(board, player){
+    return HOUSES[player].every(i => board[i] === 0);
+  }
+
+  // Applies a move; returns {board, extraTurn, gameOver}
+  function applyMove(board, player, house){
+    const b = board.slice();
+    let seeds = b[house];
+    b[house] = 0;
+    const ownStore = STORE[player];
+    const oppStore = STORE[1-player];
+    let idx = house;
+    while (seeds > 0){
+      idx = (idx + 1) % 14;
+      if (idx === oppStore) continue;
+      b[idx]++;
+      seeds--;
+    }
+    let extraTurn = false;
+    if (idx === ownStore){
+      extraTurn = true;
+    } else {
+      const onOwnSide = HOUSES[player].includes(idx);
+      if (onOwnSide && b[idx] === 1){
+        const opp = opposite(idx);
+        if (b[opp] > 0){
+          b[ownStore] += b[opp] + b[idx];
+          b[opp] = 0;
+          b[idx] = 0;
+        }
+      }
+    }
+    let gameOver = false;
+    if (isSideEmpty(b, YOU) || isSideEmpty(b, OPP)){
+      gameOver = true;
+      for (const p of [YOU, OPP]){
+        if (!isSideEmpty(b, p)){
+          let sum = 0;
+          for (const h of HOUSES[p]){ sum += b[h]; b[h] = 0; }
+          b[STORE[p]] += sum;
+        }
+      }
+    }
+    return { board: b, extraTurn, gameOver };
+  }
+
+  // ---- Search worker ----
+  // The solver (transposition-table alpha-beta, iterative deepening) runs in a Web Worker so a
+  // multi-second search never freezes the page. Built from a Blob so the whole app stays one file.
+  const WORKER_SOURCE = [
+    "const YOU = 0, OPP = 1;",
+    "const STORE = [6, 13];",
+    "const HOUSES = [[0,1,2,3,4,5],[7,8,9,10,11,12]];",
+    "function legalMoves(board, player){ return HOUSES[player].filter(i => board[i] > 0); }",
+    "function isSideEmpty(board, player){ return HOUSES[player].every(i => board[i] === 0); }",
+    "function applyMove(board, player, house){",
+    "  const b = board.slice();",
+    "  let seeds = b[house];",
+    "  b[house] = 0;",
+    "  const ownStore = STORE[player];",
+    "  const oppStore = STORE[1-player];",
+    "  let idx = house;",
+    "  while (seeds > 0){",
+    "    idx = (idx + 1) % 14;",
+    "    if (idx === oppStore) continue;",
+    "    b[idx]++;",
+    "    seeds--;",
+    "  }",
+    "  let extraTurn = false, captured = false;",
+    "  if (idx === ownStore){",
+    "    extraTurn = true;",
+    "  } else {",
+    "    const onOwnSide = HOUSES[player].includes(idx);",
+    "    if (onOwnSide && b[idx] === 1){",
+    "      const opp = 12 - idx;",
+    "      if (b[opp] > 0){",
+    "        b[ownStore] += b[opp] + b[idx];",
+    "        b[opp] = 0;",
+    "        b[idx] = 0;",
+    "        captured = true;",
+    "      }",
+    "    }",
+    "  }",
+    "  let gameOver = false;",
+    "  if (isSideEmpty(b, YOU) || isSideEmpty(b, OPP)){",
+    "    gameOver = true;",
+    "    for (const p of [YOU, OPP]){",
+    "      if (!isSideEmpty(b, p)){",
+    "        let sum = 0;",
+    "        for (const h of HOUSES[p]){ sum += b[h]; b[h] = 0; }",
+    "        b[STORE[p]] += sum;",
+    "      }",
+    "    }",
+    "  }",
+    "  return { board: b, extraTurn, gameOver, captured };",
+    "}",
+    "function terminalScore(board, player){ return board[STORE[player]] - board[STORE[1-player]]; }",
+    // Static, board-independent: how many seeds sown from house i land exactly on player's own
+    // store (accounting for the opponent-store skip). Used to spot "I can take another turn
+    // right now" opportunities cheaply inside the heuristic, without any extra search.
+    "function computeDistToStore(i, player){",
+    "  const ownStore = STORE[player], oppStore = STORE[1-player];",
+    "  let idx = i, count = 0;",
+    "  while (true){",
+    "    idx = (idx + 1) % 14;",
+    "    if (idx === oppStore) continue;",
+    "    count++;",
+    "    if (idx === ownStore) return count;",
+    "  }",
+    "}",
+    "const DIST_TO_STORE = [[], []];",
+    "for (const p of [YOU, OPP]) for (const h of HOUSES[p]) DIST_TO_STORE[p][h] = computeDistToStore(h, p);",
+    // Heuristic used at any horizon that isn't a proven/terminal value. Beyond raw store and
+    // seed-count differential, it scores two tactical signals a naive material-only heuristic
+    // misses entirely: capture threats (an empty house of mine whose mirror opponent house is
+    // loaded — a live capture opportunity) and extra-turn opportunities (a house whose seed
+    // count would land exactly in the mover's own store right now).
+    "function heuristic(board, player){",
+    "  const opp = 1 - player;",
+    "  const ownHouses = HOUSES[player], oppHouses = HOUSES[opp];",
+    "  let ownSeeds = 0, oppSeeds = 0, ownThreats = 0, oppThreats = 0, ownExtra = 0, oppExtra = 0, ownMobility = 0, oppMobility = 0;",
+    "  for (const i of ownHouses){",
+    "    const v = board[i];",
+    "    ownSeeds += v;",
+    "    if (v > 0) ownMobility++;",
+    "    if (v === 0 && board[12 - i] > 0) ownThreats++;",
+    "    if (v === DIST_TO_STORE[player][i]) ownExtra++;",
+    "  }",
+    "  for (const i of oppHouses){",
+    "    const v = board[i];",
+    "    oppSeeds += v;",
+    "    if (v > 0) oppMobility++;",
+    "    if (v === 0 && board[12 - i] > 0) oppThreats++;",
+    "    if (v === DIST_TO_STORE[opp][i]) oppExtra++;",
+    "  }",
+    "  return (board[STORE[player]] - board[STORE[opp]]) * 6",
+    "    + (ownSeeds - oppSeeds)",
+    "    + (ownThreats - oppThreats) * 4",
+    "    + (ownExtra - oppExtra) * 1.5",
+    "    + (ownMobility - oppMobility) * 0.3;",
+    "}",
+    // Quiescence search: at the horizon, don't trust a static evaluation that might be sitting
+    // mid-tactic. Keep extending — but ONLY through "loud" moves (captures, extra turns, or the
+    // game literally ending) — until the position quiets down or a small ply cap is hit. This is
+    // the standard fix for the horizon effect: a heuristic that can't see a capture one ply away.
+    "const QUIESCENCE_MAX_PLIES = 4;",
+    "function qsearch(board, player, alpha, beta, qDepth){",
+    "  const standPat = heuristic(board, player);",
+    "  if (qDepth <= 0) return standPat;",
+    "  if (standPat >= beta) return beta;",
+    "  if (standPat > alpha) alpha = standPat;",
+    "  const moves = legalMoves(board, player);",
+    "  const loud = moves.map(m => ({ m, ...applyMove(board, player, m) })).filter(c => c.gameOver || c.captured || c.extraTurn);",
+    "  for (const child of loud){",
+    "    let score;",
+    "    if (child.gameOver) score = terminalScore(child.board, player);",
+    "    else if (child.extraTurn) score = qsearch(child.board, player, alpha, beta, qDepth - 1);",
+    "    else score = -qsearch(child.board, 1 - player, -beta, -alpha, qDepth - 1);",
+    "    if (score >= beta) return beta;",
+    "    if (score > alpha) alpha = score;",
+    "  }",
+    "  return alpha;",
+    "}",
+    // Real transposition table (depth + alpha-beta bound flags), not just a memo of finished
+    // values: this is what actually lets iterative deepening reuse work between depths, via
+    // both cutoffs (entry.depth >= depth) and move ordering (try the prior best move first).
+    // Backed by IndexedDB so solved positions survive across games/sessions instead of being
+    // re-solved every time. MAX_TT_ENTRIES is a soft ceiling on brand-new positions only —
+    // once hit, existing entries can still be upgraded (deeper/exact results always win), so
+    // the dataset only ever gets better, never regresses or loses previously-proven results.
+    "const tt = new Map();",
+    "const dirty = new Set();",
+    "const MAX_TT_ENTRIES = 2000000;",
+    "let db = null, dbReady = false;",
+    "const pendingMessages = [];",
+    // Some environments (notably file:// origins in Chromium) expose `indexedDB` as an object
+    // but never fire onsuccess/onerror/onupgradeneeded — the request just hangs forever. A race
+    // against a timeout guarantees we always fall back to in-memory-only rather than freezing
+    // every future request behind a DB open that will never resolve.
+    "function withTimeout(promise, ms, fallback){",
+    "  return new Promise((resolve) => {",
+    "    let settled = false;",
+    "    const timer = setTimeout(() => { if (!settled){ settled = true; resolve(fallback); } }, ms);",
+    "    promise.then((v) => { if (!settled){ settled = true; clearTimeout(timer); resolve(v); } });",
+    "  });",
+    "}",
+    "function openDb(){",
+    "  return new Promise((resolve) => {",
+    "    try {",
+    "      const req = indexedDB.open('mancala-solver-db', 1);",
+    "      req.onupgradeneeded = (e) => {",
+    "        const d = e.target.result;",
+    "        if (!d.objectStoreNames.contains('positions')) d.createObjectStore('positions', { keyPath: 'key' });",
+    "      };",
+    "      req.onsuccess = (e) => resolve(e.target.result);",
+    "      req.onerror = () => resolve(null);",
+    "    } catch (err) { resolve(null); }",
+    "  });",
+    "}",
+    "function loadAll(d){",
+    "  return new Promise((resolve) => {",
+    "    if (!d) return resolve();",
+    "    const tx = d.transaction('positions', 'readonly');",
+    "    const req = tx.objectStore('positions').getAll();",
+    "    req.onsuccess = () => {",
+    "      for (const rec of req.result) tt.set(rec.key, { depth: rec.depth, score: rec.score, move: rec.move, flag: rec.flag, approx: rec.approx });",
+    "      resolve();",
+    "    };",
+    "    req.onerror = () => resolve();",
+    "  });",
+    "}",
+    "function flushDirty(){",
+    "  if (!db || dirty.size === 0) return;",
+    "  const tx = db.transaction('positions', 'readwrite');",
+    "  const store = tx.objectStore('positions');",
+    "  for (const key of dirty){",
+    "    const entry = tt.get(key);",
+    "    if (entry) store.put({ key, depth: entry.depth, score: entry.score, move: entry.move, flag: entry.flag, approx: entry.approx });",
+    "  }",
+    "  dirty.clear();",
+    "}",
+    "const PVS_EPS = 1e-6;",
+    // MAX_RAW_PLIES bounds worst-case recursion: extra-turn continuations don't consume `depth`
+    // (see below), so without a separate hard cap a long chain of forced extra turns could
+    // recurse far deeper than intended. In practice extra-turn chains are short (they require
+    // landing exactly in one's own store repeatedly), so this ceiling is rarely approached.
+    "const MAX_RAW_PLIES = 60;",
+    "function search(board, player, depth, alpha, beta, deadline, rawPlies){",
+    "  rawPlies = rawPlies || 0;",
+    "  const moves = legalMoves(board, player);",
+    "  if (moves.length === 0) return { score: terminalScore(board, player), move: null, approx: false };",
+    "  if (deadline && performance.now() > deadline) return { score: heuristic(board, player), move: null, approx: true, timedOut: true };",
+    "  const key = board.join(',') + '|' + player;",
+    "  const alphaOrig = alpha;",
+    "  let ttMove = null;",
+    "  const entry = tt.get(key);",
+    "  if (entry){",
+    "    ttMove = entry.move;",
+    "    if (entry.depth >= depth && !entry.approx){",
+    "      if (entry.flag === 'EXACT') return entry;",
+    "      if (entry.flag === 'LOWER') alpha = Math.max(alpha, entry.score);",
+    "      else if (entry.flag === 'UPPER') beta = Math.min(beta, entry.score);",
+    "      if (alpha >= beta) return entry;",
+    "    }",
+    "  }",
+    "  if (depth <= 0 || rawPlies >= MAX_RAW_PLIES) return { score: qsearch(board, player, alpha, beta, QUIESCENCE_MAX_PLIES), move: null, approx: true };",
+    "  const children = moves.map(m => ({ m, ...applyMove(board, player, m) }));",
+    "  children.sort((a, b) => priority(b, player, ttMove) - priority(a, player, ttMove));",
+    "  let bestScore = -Infinity, bestMove = children[0].m, anyApprox = false, timedOut = false;",
+    // Principal Variation Search: the first (best-ordered) child gets a full window; every
+    // later child first gets a cheap zero-width probe, and only if that probe suggests it might
+    // actually beat the current best does it get the expensive full-window re-search. Same
+    // result as plain alpha-beta, just far fewer full-window nodes explored.
+    "  for (let i = 0; i < children.length; i++){",
+    "    if (timedOut) break;",
+    "    const { m, board: nb, extraTurn, gameOver } = children[i];",
+    "    let score, childApprox = false;",
+    "    if (gameOver){",
+    "      score = terminalScore(nb, player);",
+    "    } else if (extraTurn){",
+    "      if (i === 0){",
+    "        const r = search(nb, player, depth, alpha, beta, deadline, rawPlies + 1);",
+    "        score = r.score; childApprox = r.approx; if (r.timedOut) timedOut = true;",
+    "      } else {",
+    "        let r = search(nb, player, depth, alpha, alpha + PVS_EPS, deadline, rawPlies + 1);",
+    "        score = r.score; childApprox = r.approx; if (r.timedOut) timedOut = true;",
+    "        if (!timedOut && score > alpha && score < beta){",
+    "          r = search(nb, player, depth, alpha, beta, deadline, rawPlies + 1);",
+    "          score = r.score; childApprox = childApprox || r.approx; if (r.timedOut) timedOut = true;",
+    "        }",
+    "      }",
+    "    } else {",
+    "      if (i === 0){",
+    "        const r = search(nb, 1 - player, depth - 1, -beta, -alpha, deadline, rawPlies + 1);",
+    "        score = -r.score; childApprox = r.approx; if (r.timedOut) timedOut = true;",
+    "      } else {",
+    "        let r = search(nb, 1 - player, depth - 1, -alpha - PVS_EPS, -alpha, deadline, rawPlies + 1);",
+    "        score = -r.score; childApprox = r.approx; if (r.timedOut) timedOut = true;",
+    "        if (!timedOut && score > alpha && score < beta){",
+    "          r = search(nb, 1 - player, depth - 1, -beta, -alpha, deadline, rawPlies + 1);",
+    "          score = -r.score; childApprox = childApprox || r.approx; if (r.timedOut) timedOut = true;",
+    "        }",
+    "      }",
+    "    }",
+    "    if (childApprox) anyApprox = true;",
+    "    if (score > bestScore){ bestScore = score; bestMove = m; }",
+    "    alpha = Math.max(alpha, score);",
+    "    if (alpha >= beta) break;",
+    "  }",
+    "  const flag = bestScore <= alphaOrig ? 'UPPER' : (bestScore >= beta ? 'LOWER' : 'EXACT');",
+    "  const result = { score: bestScore, move: bestMove, approx: anyApprox, timedOut };",
+    "  const prior = tt.get(key);",
+    "  if (!prior || !anyApprox || prior.depth <= depth){",
+    "    if (prior || tt.size < MAX_TT_ENTRIES){",
+    "      tt.set(key, { depth, score: bestScore, move: bestMove, flag, approx: anyApprox });",
+    "      dirty.add(key);",
+    "    }",
+    "  }",
+    "  return result;",
+    "}",
+    "function priority(child, player, ttMove){",
+    "  if (child.m === ttMove) return 1e9;",
+    "  if (child.gameOver) return 1e6 + terminalScore(child.board, player);",
+    "  if (child.captured) return 2000;",
+    "  if (child.extraTurn) return 500;",
+    "  return heuristic(child.board, player);",
+    "}",
+    "function iterativeSearch(board, player, maxDepth, timeBudgetMs){",
+    "  const deadline = performance.now() + timeBudgetMs;",
+    "  let best = { score: 0, move: legalMoves(board, player)[0], approx: true };",
+    "  for (let d = 2; d <= maxDepth; d += 2){",
+    "    const res = search(board, player, d, -Infinity, Infinity, deadline);",
+    "    if (res.move !== null && res.move !== undefined) best = res;",
+    "    if (!res.approx) break;",
+    "    if (res.timedOut || performance.now() > deadline) break;",
+    "  }",
+    "  return best;",
+    "}",
+    "function aiChooseMove(board, difficulty){",
+    "  const moves = legalMoves(board, OPP);",
+    "  if (difficulty === 'medium'){",
+    "    const scored = moves.map(m => {",
+    "      const { board: nb, extraTurn, gameOver } = applyMove(board, OPP, m);",
+    "      let s;",
+    "      if (gameOver) s = terminalScore(nb, OPP);",
+    "      else if (extraTurn) s = search(nb, OPP, 3, -Infinity, Infinity, null).score;",
+    "      else s = -search(nb, YOU, 3, -Infinity, Infinity, null).score;",
+    "      return { m, s };",
+    "    });",
+    "    const top = Math.max(...scored.map(x => x.s));",
+    "    const near = scored.filter(x => x.s >= top - 1);",
+    "    return { move: near[Math.floor(Math.random()*near.length)].m, approx: true };",
+    "  }",
+    "  if (difficulty === 'hard') return iterativeSearch(board, OPP, 20, 1200);",
+    "  return iterativeSearch(board, OPP, 100, 3500);", // expert
+    "}",
+    "function handleMessage(msg){",
+    "  if (msg.type === 'hint'){",
+    "    const result = iterativeSearch(msg.board, msg.player, 100, 3500);",
+    "    flushDirty();",
+    "    self.postMessage({ type: 'hint', gen: msg.gen, result });",
+    "  } else if (msg.type === 'ai'){",
+    "    const result = aiChooseMove(msg.board, msg.difficulty);",
+    "    flushDirty();",
+    "    self.postMessage({ type: 'ai', gen: msg.gen, move: result.move });",
+    "  }",
+    "  self.postMessage({ type: 'dbStatus', text: (db ? tt.size.toLocaleString() + ' positions in the solved-position database' : 'Running without persistence in this environment (in-memory only for this session).') });",
+    "}",
+    "self.onmessage = (e) => {",
+    "  if (!dbReady){ pendingMessages.push(e.data); return; }",
+    "  handleMessage(e.data);",
+    "};",
+    "withTimeout(openDb(), 1200, null).then((d) => {",
+    "  db = d;",
+    "  return db ? withTimeout(loadAll(db), 2000, undefined) : undefined;",
+    "}).then(() => {",
+    "  dbReady = true;",
+    "  self.postMessage({ type: 'dbStatus', text: db ? (tt.size.toLocaleString() + ' positions loaded from the solved-position database') : 'No persistent storage available here — solving in memory only for this session.' });",
+    "  const queued = pendingMessages.splice(0);",
+    "  queued.forEach(handleMessage);",
+    "});"
+  ].join("\n");
+
+  const workerBlob = new Blob([WORKER_SOURCE], { type: 'application/javascript' });
+  const solverWorker = new Worker(URL.createObjectURL(workerBlob));
+
+  // Pure enumeration of the pits a sow touches, in order, for animation purposes only
+  // (mirrors applyMove's walk, but doesn't mutate anything or handle capture/extra-turn).
+  function computeSowPath(board, player, house){
+    const oppStore = STORE[1 - player];
+    let seeds = board[house];
+    let idx = house;
+    const path = [];
+    while (seeds > 0){
+      idx = (idx + 1) % 14;
+      if (idx === oppStore) continue;
+      path.push(idx);
+      seeds--;
+    }
+    return path;
+  }
+
+  // ---- Game state ----
+  let board, currentPlayer, mode, difficulty, gameOver, history, aiThinking, hintComputing, lastHint;
+  let animating = false;
+  let renderBoard = null; // when set, render() shows this instead of `board` (mid-animation display)
+  // Incremented whenever the state is reset or rewound outside the normal move chain,
+  // so a stale worker reply (or AI setTimeout) scheduled against an earlier state is ignored.
+  let gen = 0;
+
+  solverWorker.onmessage = (e) => {
+    const msg = e.data;
+    if (msg.type === 'dbStatus'){ dbStatusEl.textContent = msg.text; return; } // not tied to any single move/gen
+    if (msg.gen !== gen) return; // state moved on since this was requested; discard
+    if (msg.type === 'hint'){
+      hintComputing = false;
+      lastHint = msg.result;
+      render();
+    } else if (msg.type === 'ai'){
+      aiThinking = false;
+      doMove(OPP, msg.move);
+    }
+  };
+
+  function resetGame(){
+    gen++;
+    animating = false;
+    renderBoard = null;
+    board = initialBoard();
+    currentPlayer = firstMoveSelect.value === 'you' ? YOU : OPP;
+    gameOver = false;
+    history = [];
+    aiThinking = false;
+    hintComputing = false;
+    lastHint = null;
+    landingArrowEl.classList.remove('show');
+    modalOverlay.classList.remove('show');
+    render();
+    maybeAdvanceTurn();
+  }
+
+  function snapshot(){
+    history.push({ board: board.slice(), currentPlayer, gameOver });
+  }
+
+  function undo(){
+    if (aiThinking || animating) return;
+    if (history.length === 0) return;
+    gen++;
+    const prev = history.pop();
+    board = prev.board;
+    currentPlayer = prev.currentPlayer;
+    gameOver = prev.gameOver;
+    hintComputing = false;
+    modalOverlay.classList.remove('show');
+    render();
+    maybeAdvanceTurn();
+  }
+
+  // Public entry point: animates the sow, then applies the real rules via commitMove().
+  function doMove(player, house){
+    if (animating) return;
+    gen++; // invalidates any in-flight worker request computed against the pre-move board
+    const localGen = gen;
+    animating = true;
+    landingArrowEl.classList.remove('show');
+
+    const path = computeSowPath(board, player, house);
+    const running = board.slice();
+    running[house] = 0; // seeds are picked up out of the source house immediately
+    renderBoard = running;
+    render();
+
+    sowTokenEl.style.left = elCenter(pitElByIdx.get(house)).x + 'px';
+    sowTokenEl.style.top = elCenter(pitElByIdx.get(house)).y + 'px';
+    sowTokenEl.classList.add('active');
+
+    let i = 0;
+    function step(){
+      if (localGen !== gen){ sowTokenEl.classList.remove('active'); return; } // reset/undo happened mid-animation
+      if (i >= path.length){
+        sowTokenEl.classList.remove('active');
+        animating = false;
+        renderBoard = null;
+        commitMove(player, house);
+        return;
+      }
+      const idx = path[i];
+      running[idx]++;
+      positionFloaterAt(sowTokenEl, idx, 0);
+      render();
+      i++;
+      setTimeout(step, 110);
+    }
+    setTimeout(step, 90);
+  }
+
+  function commitMove(player, house){
+    snapshot();
+    const result = applyMove(board, player, house);
+    board = result.board;
+    if (result.gameOver){
+      gameOver = true;
+      currentPlayer = null;
+      render();
+      showGameOver();
+      return;
+    }
+    if (!result.extraTurn){
+      currentPlayer = 1 - player;
+    }
+    render();
+    maybeAdvanceTurn();
+  }
+
+  function maybeAdvanceTurn(){
+    if (gameOver) return;
+    if (currentPlayer === OPP && mode === 'ai'){
+      if (aiThinking) return; // already scheduled for this turn
+      aiThinking = true;
+      const scheduledGen = gen;
+      render();
+      if (difficulty === 'easy'){
+        setTimeout(() => {
+          if (scheduledGen !== gen) return;
+          const moves = legalMoves(board, OPP);
+          const mv = moves[Math.floor(Math.random() * moves.length)];
+          aiThinking = false;
+          doMove(OPP, mv);
+        }, 450);
+      } else {
+        setTimeout(() => {
+          if (scheduledGen !== gen) return;
+          solverWorker.postMessage({ type: 'ai', board, difficulty, gen: scheduledGen });
+        }, 300);
+      }
+    } else if (currentPlayer === YOU){
+      hintComputing = true;
+      lastHint = null;
+      render();
+      solverWorker.postMessage({ type: 'hint', board, player: YOU, gen });
+    } else {
+      // manual mode, opponent's turn: nothing to compute, wait for user input
+      lastHint = null;
+      hintComputing = false;
+      render();
+    }
+  }
+
+  function showGameOver(){
+    const youScore = board[6], oppScore = board[13];
+    let title, text;
+    if (youScore > oppScore){ title = "You Win!"; }
+    else if (oppScore > youScore){ title = "Opponent Wins"; }
+    else { title = "It's a Tie"; }
+    text = `Final score — You: ${youScore}, Opponent: ${oppScore}`;
+    modalTitle.textContent = title;
+    modalText.textContent = text;
+    modalOverlay.classList.add('show');
+  }
+
+  // ---- Rendering ----
+  const boardWrapEl = document.querySelector('.board-wrap');
+  const topRowEl = document.getElementById('topRow');
+  const bottomRowEl = document.getElementById('bottomRow');
+  const youStoreEl = document.getElementById('youStore');
+  const oppStoreEl = document.getElementById('oppStore');
+  const youStoreCountEl = document.getElementById('youStoreCount');
+  const oppStoreCountEl = document.getElementById('oppStoreCount');
+  const turnPillEl = document.getElementById('turnPill');
+  const scoreLineEl = document.getElementById('scoreLine');
+  const hintBoxEl = document.getElementById('hintBox');
+  const modeSelect = document.getElementById('modeSelect');
+  const difficultySelect = document.getElementById('difficultySelect');
+  const difficultyWrap = document.getElementById('difficultyWrap');
+  const firstMoveSelect = document.getElementById('firstMoveSelect');
+  const undoBtn = document.getElementById('undoBtn');
+  const newGameBtn = document.getElementById('newGameBtn');
+  const modalOverlay = document.getElementById('modalOverlay');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalText = document.getElementById('modalText');
+  const modalCloseBtn = document.getElementById('modalCloseBtn');
+  const dbStatusEl = document.getElementById('dbStatus');
+
+  // top row displayed left-to-right = house indices 12,11,10,9,8,7
+  const topOrder = [12,11,10,9,8,7];
+  const bottomOrder = [0,1,2,3,4,5];
+  const pitElByIdx = new Map();
+
+  // Bright bead-style seed colors (GamePigeon-esque), and dice-like layout presets for up to 6 shown.
+  const SEED_PALETTE = ['#ff6b6b','#4dd0e1','#ffd54a','#66bb6a','#ba68c8','#ff8a65'];
+  const SEED_LAYOUT = {
+    1: [[50,50]],
+    2: [[35,38],[65,62]],
+    3: [[35,35],[65,35],[50,68]],
+    4: [[33,33],[67,33],[33,67],[67,67]],
+    5: [[33,30],[67,30],[50,50],[33,72],[67,72]],
+    6: [[33,26],[67,26],[33,50],[67,50],[33,74],[67,74]]
+  };
+
+  function renderSeeds(el, count){
+    let wrap = el.querySelector('.seed-wrap');
+    if (!wrap){
+      wrap = document.createElement('div');
+      wrap.className = 'seed-wrap';
+      wrap.style.position = 'absolute';
+      wrap.style.inset = '0';
+      el.insertBefore(wrap, el.firstChild);
+    }
+    const shown = Math.min(count, 6);
+    const layout = SEED_LAYOUT[shown] || [];
+    while (wrap.children.length > shown) wrap.removeChild(wrap.lastChild);
+    while (wrap.children.length < shown){
+      const dot = document.createElement('span');
+      dot.className = 'seed-dot';
+      wrap.appendChild(dot);
+    }
+    [...wrap.children].forEach((dot, i) => {
+      dot.style.left = layout[i][0] + '%';
+      dot.style.top = layout[i][1] + '%';
+      dot.style.background = `radial-gradient(circle at 35% 30%, #fff, ${SEED_PALETTE[i % SEED_PALETTE.length]} 65%)`;
+    });
+  }
+
+  function makePit(idx){
+    const el = document.createElement('div');
+    el.className = 'pit';
+    el.dataset.idx = idx;
+    el.innerHTML = `<span class="idx-label"></span><span class="count-badge"></span>`;
+    el.addEventListener('click', () => onPitClick(idx));
+    el.addEventListener('mouseenter', () => onPitHover(idx, true));
+    el.addEventListener('mouseleave', () => onPitHover(idx, false));
+    pitElByIdx.set(idx, el);
+    return el;
+  }
+
+  topOrder.forEach(i => topRowEl.appendChild(makePit(i)));
+  bottomOrder.forEach(i => bottomRowEl.appendChild(makePit(i)));
+  pitElByIdx.set(6, youStoreEl);
+  pitElByIdx.set(13, oppStoreEl);
+
+  // Single floating landing-preview arrow and traveling sow token, positioned via JS.
+  const landingArrowEl = document.createElement('div');
+  landingArrowEl.className = 'landing-arrow';
+  landingArrowEl.textContent = '▾';
+  boardWrapEl.appendChild(landingArrowEl);
+
+  const sowTokenEl = document.createElement('div');
+  sowTokenEl.className = 'sow-token';
+  boardWrapEl.appendChild(sowTokenEl);
+
+  function elCenter(el){
+    const boardRect = boardWrapEl.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    return { x: r.left - boardRect.left + r.width / 2, y: r.top - boardRect.top + r.height / 2 };
+  }
+
+  function positionFloaterAt(floaterEl, idx, offsetY){
+    const el = pitElByIdx.get(idx);
+    const c = elCenter(el);
+    floaterEl.style.left = c.x + 'px';
+    floaterEl.style.top = (c.y + (offsetY || 0)) + 'px';
+  }
+
+  function isHousePlayable(idx){
+    if (gameOver || aiThinking || animating) return false;
+    if (currentPlayer === YOU) return HOUSES[YOU].includes(idx) && board[idx] > 0;
+    if (currentPlayer === OPP && mode === 'manual') return HOUSES[OPP].includes(idx) && board[idx] > 0;
+    return false;
+  }
+
+  function onPitHover(idx, entering){
+    if (!entering || !isHousePlayable(idx)){
+      landingArrowEl.classList.remove('show');
+      return;
+    }
+    const path = computeSowPath(board, currentPlayer, idx);
+    const landingIdx = path[path.length - 1];
+    const inTopRow = topOrder.includes(landingIdx);
+    // Point the arrow at the landing pit/store from the outward side, so it reads as "seed lands here".
+    positionFloaterAt(landingArrowEl, landingIdx, inTopRow ? -26 : 26);
+    landingArrowEl.style.transform = inTopRow ? 'translate(-50%, -50%) rotate(180deg)' : 'translate(-50%, -50%)';
+    landingArrowEl.classList.add('show');
+  }
+
+  function onPitClick(idx){
+    if (gameOver || aiThinking || animating) return;
+    landingArrowEl.classList.remove('show');
+    if (currentPlayer === YOU){
+      if (!HOUSES[YOU].includes(idx) || board[idx] === 0) return;
+      doMove(YOU, idx);
+    } else if (currentPlayer === OPP && mode === 'manual'){
+      if (!HOUSES[OPP].includes(idx) || board[idx] === 0) return;
+      doMove(OPP, idx);
+    }
+  }
+
+  function render(){
+    const rb = renderBoard || board;
+    youStoreCountEl.textContent = rb[6];
+    oppStoreCountEl.textContent = rb[13];
+    scoreLineEl.textContent = `You: ${rb[6]}  ·  Opponent: ${rb[13]}`;
+
+    const suggestedHouse = (lastHint && currentPlayer === YOU && !gameOver && !animating) ? lastHint.move : null;
+
+    [...topRowEl.children, ...bottomRowEl.children].forEach(el => {
+      const idx = Number(el.dataset.idx);
+      const count = rb[idx];
+      renderSeeds(el, count);
+      el.querySelector('.count-badge').textContent = count;
+      el.classList.toggle('empty-pit', count === 0);
+      el.classList.toggle('suggested', idx === suggestedHouse);
+
+      const isYourClickable = isHousePlayable(idx) && currentPlayer === YOU;
+      const isOppManualClickable = isHousePlayable(idx) && currentPlayer === OPP;
+      el.classList.toggle('clickable', isYourClickable || isOppManualClickable);
+      el.classList.toggle('opp-input', isOppManualClickable);
+    });
+
+    if (gameOver){
+      turnPillEl.textContent = 'Game Over';
+      turnPillEl.className = 'turn-pill turn-you';
+    } else if (aiThinking){
+      turnPillEl.textContent = 'Opponent thinking…';
+      turnPillEl.className = 'turn-pill turn-opp';
+    } else if (currentPlayer === YOU){
+      turnPillEl.textContent = 'Your turn';
+      turnPillEl.className = 'turn-pill turn-you';
+    } else {
+      turnPillEl.textContent = mode === 'manual' ? "Enter opponent's move" : "Opponent's turn";
+      turnPillEl.className = 'turn-pill turn-opp';
+    }
+
+    if (gameOver){
+      hintBoxEl.textContent = 'Game finished.';
+    } else if (aiThinking){
+      hintBoxEl.textContent = 'Opponent is calculating a move…';
+    } else if (currentPlayer === YOU && hintComputing){
+      hintBoxEl.textContent = 'Computing suggestion (searching ahead, up to a couple seconds)… you can move before it finishes if you like.';
+    } else if (currentPlayer === YOU && lastHint){
+      const houseLabel = bottomOrder.indexOf(lastHint.move) + 1;
+      const evalText = lastHint.score > 0 ? `+${lastHint.score.toFixed(1)}` : lastHint.score.toFixed(1);
+      // Only a proven (approx:false) score is an actual seed margin — a heuristic estimate mixes
+      // in threat/mobility/tempo terms and is on its own arbitrary scale, not seed units.
+      const evalLabel = lastHint.approx
+        ? `evaluation score ${evalText} (deep search estimate, not a seed count)`
+        : `projected final-score margin ${evalText} seeds (game-theoretically proven optimal)`;
+      hintBoxEl.textContent = `Suggested: House ${houseLabel} (highlighted) — ${evalLabel}.`;
+    } else if (currentPlayer === OPP && mode === 'manual'){
+      hintBoxEl.textContent = "Click the house on the top row that the opponent actually played.";
+    } else {
+      hintBoxEl.textContent = '';
+    }
+
+    undoBtn.disabled = history.length === 0 || aiThinking || animating;
+    difficultyWrap.style.display = mode === 'ai' ? '' : 'none';
+  }
+
+  modeSelect.addEventListener('change', () => {
+    mode = modeSelect.value;
+    render();
+    if (currentPlayer === OPP) maybeAdvanceTurn();
+  });
+  difficultySelect.addEventListener('change', () => {
+    difficulty = difficultySelect.value;
+  });
+  undoBtn.addEventListener('click', undo);
+  newGameBtn.addEventListener('click', resetGame);
+  modalCloseBtn.addEventListener('click', resetGame);
+
+  mode = modeSelect.value;
+  difficulty = difficultySelect.value;
+  resetGame();
+})();
+</script>
+</body>
+</html>
